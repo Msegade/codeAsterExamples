@@ -1,25 +1,19 @@
-# Notes:
-#  - Les commentaires sont precedes du signe #
-#  - Une meme commande peut se suivre sur plusieurs lignes
-
-
-# Commande obligatoire pour commencer
+# First mandatory command
 # -----------------------------------
 
 DEBUT();
 
-# Lecture du maillage
+# Read mesh
 # ------------------
-# Lecture du maillage dans le fichier de maillage et creation du concept mail
+# Read mesh in the mesh file and name the resulting concept 'mail'
 
 mail = LIRE_MAILLAGE  ( FORMAT='MED') ;
 
-# Definition du modele
+# Definition of the model
 # --------------------
-# - Un modele est un concept contenant les types d'elements finis utiles au
-#   calcul,
-# - Il associe a toutes les mailles du maillage des elements finis mecaniques
-#   axisymetriques.
+# - A model is a concept which contains the types of finite elements used in 
+#   the analysis
+# - Assings to all the elements a mechanic, axisymetric finite element
 
 
 modl=AFFE_MODELE(MAILLAGE=mail,
@@ -28,52 +22,50 @@ modl=AFFE_MODELE(MAILLAGE=mail,
                         MODELISATION='AXIS',),);
 
 
-# Definition du materiau
+# Material definition
 # ----------------------
-# Les caracteristiques de chaque materiau constituant le maillage sont fournies:
-#   - module d'young,
-#   - coefficient de poisson.
+# Characteristics of the material
+#   - Young Modulus
+#   - Poisson Coefficient
 
 acier=DEFI_MATERIAU(ELAS=_F(E=210000000000.0,
                             NU=0.3,),);
 
-# Affectation du materiau sur le maillage
+# Assignment of the material on the mesh
 # ---------------------------------------
-# Ici le materiau est le meme pour tout le maillage. Sinon on pourrait affecter
-# des materiaux differents sur des groupes de mailles.
+# All the mesh has the same material. It could be different materials for different
+# mesh groups
 
 chmat=AFFE_MATERIAU(MAILLAGE=mail,
                     AFFE=_F(TOUT='OUI',
                             MATER=acier,),);
 
-# Definition des conditions aux limites
+# Boundary conditions
 # -------------------------------------
-# Les conditions aux limites peuvent porter sur des noeuds, des groupes de noeuds,
-# des mailles ou des groupes de mailles
-# Ici les noeuds du groupe de mailles LAB (mailles de bord) sont affectees de
-# la condition: DY = 0 ce qui signifie "deplacement suivant y" nul.
+# The boundary conditions can be applied into nodes, node groups  elements 
+# or element groups
+# Here the nodes of the element group LAB, have the condition DY=0. This means
+# "zero displacement in the Y direction" 
 
 clim=AFFE_CHAR_MECA(MODELE=modl,
                 FACE_IMPO=_F(GROUP_MA='LAB',
                             DY=0,),);
 
-# Definition du chargement:
+# Loads definition
 # -------------------------
-# Pression fonction de y
-# Les fonctions sont definies point par point (variation affine entre deux points
-# par defaut)
-# Ici la pression varie entre
-#     200000 Pa pour y=0
-#  et      0 Pa pour y=L
+# Pressure as a "y" function
+# The functions are defined point by point (linear variation between points)
+# Here the pressure varies between
+#     200000 Pa for y=0
+#  and     0 Pa for y=L
 
 f_y=DEFI_FONCTION(NOM_PARA='Y',
                   VALE=(0.0,200000.0,
                         4.0,0.0,),);
 
-# Affectation du chargement
+# Load Assingment
 # -------------------------
-# Affectation de la pression (fonction de y) sur le bord compose des groupes
-# de mailles de bord LDA
+# Assing the pressure in the boundary of the element group LDA
 
 charg=AFFE_CHAR_MECA_F(MODELE=modl,
            PRES_REP=_F(GROUP_MA=('LDA',),
@@ -81,10 +73,9 @@ charg=AFFE_CHAR_MECA_F(MODELE=modl,
 
 # Resolution
 # ----------
-# Commande globale de resolution des problemes statiques en thermo elasticite
-# lineaire
-# on definit le champ de materiau
-# on definit les chargements
+# Global command for the resolution of linear static problems and thermo-elastic 
+# with the field of materials defined
+# and the loads and boundary conditions
 
 res1=MECA_STATIQUE(
                    MODELE=modl,
@@ -92,31 +83,30 @@ res1=MECA_STATIQUE(
                    EXCIT=(_F(CHARGE=charg,),
                         _F(CHARGE=clim,),),);
 
-# Calcul des contraintes
+# Calculations of stresses
 # ----------------------
-# reuse=res1 signifie que l'on "enrichi" le concept res1: le champ de contraintes
-# sera stocke en plus du champ de deplacements
-# le nom 'SIGM_ELNO' signifie "contraintes calculees aux noeuds de chaque
-# element a partir des deplacements
+# reuse=res1 means that we enhance the concept res1: The field of stresses will 
+# be saved with the field of displacements
+# The name 'SIGM_ELNO' means "calculated stresses at each element node starting 
+# with the displacements
 
 res1=CALC_CHAMP(reuse=res1,RESULTAT=res1,CONTRAINTE=('SIGM_ELNO'))
 
-# Impression des resultats au point A
+# Print results at point A
 # -------------------------------------------
-# Impression des resultats au format texte des deplacements aux noeuds
-# correspondant au point A
+# Print the results in text format at point A
 
 IMPR_RESU(MODELE=modl,
           RESU=_F(RESULTAT=res1,
                   GROUP_NO='NOEUDA',),);
 
-# Impression des resultats pour une visualisation avec SALOME
+# Print the results for visualization with SALOME (Paravis)
 
 IMPR_RESU(FORMAT='MED',
           RESU=_F(RESULTAT=res1,),);
 
 
-# Commande obligatoire pour clore une execution
+# Mandatory command to end execution
 # ---------------------------------------------
 
 FIN();

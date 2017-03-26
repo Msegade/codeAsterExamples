@@ -4,7 +4,7 @@ import salome
 salome.salome_init()
 
 
-#############Chemin pour l'export du maillage resultat############
+#############Print results in current working directory###########
 import os
 currentpath=os.path.join(os.getcwd(), '')
 ExportPATH=currentpath
