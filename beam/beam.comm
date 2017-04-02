@@ -45,8 +45,6 @@ chmat=AFFE_MATERIAU(MAILLAGE=mail,
 # -------------------------------------
 # The boundary conditions can be applied into nodes, node groups  elements 
 # or element groups
-# Here the nodes of the element group LAB, have the condition DY=0. This means
-# "zero displacement in the Y direction" 
 
 clim=AFFE_CHAR_MECA(MODELE=modl,
                 FACE_IMPO=_F(GROUP_MA='Fix',

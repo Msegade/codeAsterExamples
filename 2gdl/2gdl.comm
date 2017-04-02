@@ -1,0 +1,91 @@
+DEBUT()
+
+MA=LIRE_MAILLAGE( )
+
+MO=AFFE_MODELE(  MAILLAGE=MA,AFFE=(
+       _F( GROUP_MA = 'SPRINGS',    PHENOMENE = 'MECANIQUE',  MODELISATION = 'DIS_T',),
+       _F( GROUP_MA = 'MASSES',     PHENOMENE = 'MECANIQUE',  MODELISATION = 'DIS_T',),
+));
+
+CONLIM=AFFE_CHAR_MECA(  MODELE=MO,
+      DDL_IMPO=(_F(  TOUT = 'OUI',   DX = 0, DZ = 0.,     ),
+                _F(  NOEUD ='RP3',   DY = 0              ),)    
+);
+
+m1 = 0.370
+m2 = 0.100
+k1 = 300
+k2 = 100
+
+CARELEM=AFFE_CARA_ELEM(   MODELE=MO,
+                          DISCRET=(
+         _F(  CARA = 'M_T_D_N',   MAILLE = 'M1',   VALE = (m1,  ), ),
+         _F(  CARA = 'M_T_D_N',   MAILLE = 'M2',   VALE = (m2,  ), ),
+         _F(  CARA = 'K_T_D_N', GROUP_MA = 'MASSES',   VALE = (0,0,0 ), ),
+         _F(  CARA = 'K_T_D_L',   MAILLE = 'K1',     VALE = (0, 2*k1,  0.,  ), ),
+         _F(  CARA = 'K_T_D_L',   MAILLE = 'K2',     VALE = (0, k2,  0.,  ), ),
+),);
+
+
+ASSEMBLAGE(  MODELE=MO,
+             CHARGE=CONLIM,      
+             CARA_ELEM=CARELEM,
+             NUME_DDL=CO("NUMEDDL"),
+             MATR_ASSE=(
+                     _F(  MATRICE = CO("RIGIDITE"),  OPTION = 'RIGI_MECA'),
+                     _F(  MATRICE = CO("MASSE"),  OPTION = 'MASS_MECA'))
+                  )
+
+MODE_MEC=CALC_MODES( OPTION='PLUS_PETITE',
+                    CALC_FREQ=_F(NMAX_FREQ=5,),
+                    MATR_RIGI=RIGIDITE,
+                    MATR_MASS=MASSE,
+                    )
+
+MODE_MEC=NORM_MODE(reuse =MODE_MEC,
+                   MODE=MODE_MEC,
+                   #NORME='MASS_GENE',);
+                   NORME='TRAN',);
+
+MODE_EXT=EXTR_MODE(FILTRE_MODE=_F(MODE=MODE_MEC,
+                                  NUME_MODE=(1,2,),),
+                   IMPRESSION=_F(CUMUL='OUI',),);
+
+IMPR_RESU(RESU=_F(RESULTAT=MODE_MEC,),);
+
+#------------------------------------------------------------------------------
+# CALCULO TRANSITORIO
+#------------------------------------------------------------------------------
+
+#PROJ_BASE(BASE=MODE_EXT,
+#          STOCKAGE='DIAG',
+#          MATR_ASSE_GENE=(_F(MATRICE=CO('MASS_GEN'),
+#                             MATR_ASSE=MASSE,),
+#                          _F(MATRICE=CO('RIGI_GEN'),
+#                             MATR_ASSE=RIGIDITE,),),
+#          VECT_ASSE_GENE=_F(VECTEUR=CO('VECT_X'),
+#                            VECT_ASSE=MONO_X,),);
+#
+#TRAN_GEN=DYNA_VIBRA(TYPE_CALCUL='TRAN',BASE_CALCUL='GENE',
+#                         SCHEMA_TEMPS=_F(SCHEMA='NEWMARK',),
+#                         MATR_MASS=MASS_GEN,
+#                         MATR_RIGI=RIGI_GEN,
+#                         AMOR_MODAL=_F(AMOR_REDUIT=0.05,),
+#                         INCREMENT=_F(INST_INIT=0.,
+#                                      INST_FIN=tfin,
+#                                      PAS=0.001,),
+#                         EXCIT=_F(VECT_ASSE_GENE=VECT_X,
+#                                  FONC_MULT=ACCELERO,),);
+#
+#RP1_DY=RECU_FONCTION(RESU_GENE=TRAN_GEN,
+#                       NOM_CHAM='DEPL',
+#                       NOM_CMP='DY',
+#                       NOEUD='RP1',);
+#
+#RP2_DY=RECU_FONCTION(RESU_GENE=TRAN_GEN,
+#                       NOM_CHAM='DEPL',
+#                       NOM_CMP='DX',
+#                       NOEUD='RP2',);
+
+FIN()
+#
