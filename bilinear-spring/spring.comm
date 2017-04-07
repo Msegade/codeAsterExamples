@@ -1,0 +1,332 @@
+# Bilinear-Spring Model
+# -----------------------------------
+
+DEBUT();
+
+# Read mesh
+# ------------------
+# In groups, last char stands for:
+# s -> surface
+# v -> volume
+# p -> point
+
+part1 = LIRE_MAILLAGE  ( UNITE=20, FORMAT='MED') ;
+part2 = LIRE_MAILLAGE  ( UNITE=21, FORMAT='MED') ;
+
+# Assembly of the meshes
+# ------------------------
+mesh12 = ASSE_MAILLAGE(
+                MAILLAGE_1=part1,
+                MAILLAGE_2=part2,
+                OPERATION='SUPERPOSE',
+);
+
+# Reorient the normal for the face groups
+# ----------------------------------------------
+mesh12 = MODI_MAILLAGE(
+                reuse = mesh12,
+                MAILLAGE = mesh12,
+                ORIE_PEAU_3D=(
+                    _F(GROUP_MA='sym1s',),
+                    _F(GROUP_MA='pin1s',),
+                    _F(GROUP_MA='fix1s',),
+                    _F(GROUP_MA='hole2s',),
+                    _F(GROUP_MA='fix2s',),
+                    _F(GROUP_MA='load1s',),
+                ),
+);
+
+# Create groups of nodes on the mesh 
+# ----------------------------------------------
+# To compute and print a correct value for reaction
+
+mesh12 = DEFI_GROUP(
+                reuse = mesh12,
+                MAILLAGE = mesh12,
+                CREA_GROUP_NO=(
+                    _F(GROUP_MA='fix2s',),
+                    _F(GROUP_MA='fix1s',),
+                    _F(GROUP_MA='sym1s',),
+                    _F(GROUP_MA='load1p',),
+                    _F(GROUP_MA='move2p',),
+                ),
+);
+
+# Create a linear mesh for results
+# ----------------------------------------
+
+qmesh = COPIER(CONCEPT=mesh12);
+lmesh = CREA_MAILLAGE(
+            MAILLAGE = qmesh,
+            QUAD_LINE = _F(TOUT='OUI',),
+);
+
+# Print the meshes to a file for debugging
+# -------------------------------------------
+IMPR_RESU(FORMAT='MED', UNITE=71, RESU=_F(MAILLAGE=qmesh,),);
+IMPR_RESU(FORMAT='MED', UNITE=72, RESU=_F(MAILLAGE=lmesh,),);
+
+# Definition of the model
+# --------------------
+# - Using the quadratic mesh
+
+qmod = AFFE_MODELE(
+                MAILLAGE=qmesh,
+                AFFE=_F(TOUT='OUI',
+                        PHENOMENE='MECANIQUE',
+                        MODELISATION='3D',),
+);
+
+# - Using the linear mesh
+
+lmod = AFFE_MODELE(
+                MAILLAGE=qmesh,
+                AFFE=_F(TOUT='OUI',
+                        PHENOMENE='MECANIQUE',
+                        MODELISATION='3D',),
+);
+
+
+# Material definition
+# ----------------------
+
+steel=DEFI_MATERIAU(ELAS=_F(E=2.1e5, NU=0.3,),);
+
+# Assignment of the material on the mesh
+# ---------------------------------------
+
+mate=AFFE_MATERIAU(
+                    MAILLAGE=qmesh,
+                    AFFE=_F(TOUT='OUI', MATER=steel,),
+);
+
+# Boundary conditions
+# -------------------------------------
+# 'Encastre' right hand end  
+#  No 'Y' displacement for symmetrical model
+
+fix1=AFFE_CHAR_MECA(
+                MODELE=qmod,
+                DDL_IMPO=(
+                    _F(GROUP_MA=('sym1s','load1s'), DY=0,),
+                    _F(GROUP_MA='fix1s', DX=0, DY=0, DZ=0),
+                ),
+);
+
+# 'Encastre' left hand end for part2
+
+fix2=AFFE_CHAR_MECA(
+                MODELE=qmod,
+                DDL_IMPO=
+                    _F(GROUP_MA='fix2s', DX=0, DY=0, DZ=0),
+);
+
+# Gluing parts around the pin
+# --------------------------------------
+glue=AFFE_CHAR_MECA(
+            MODELE=qmod,
+            LIAISON_MAIL=_F(
+               GROUP_MA_MAIT='part2v',
+               GROUP_MA_ESCL='pin1s',
+            ),
+);
+
+# Free rotation around the pin
+# -------------------------------------
+freerot=AFFE_CHAR_MECA(
+            MODELE=qmod,
+            LIAISON_MAIL=_F(
+               GROUP_MA_MAIT='part2v',
+               GROUP_MA_ESCL='pin1s',
+               DDL_MAIT='DNOR',
+               DDL_ESCL='DNOR',
+            ),
+);
+
+# Contanct condition
+# ------------------------------------
+
+contact=DEFI_CONTACT(
+            MODELE=qmod,
+            FORMULATION='DISCRETE',
+            ZONE = _F(
+               GROUP_MA_MAIT='hole2s',
+               GROUP_MA_ESCL='pin1s',
+            ),
+);
+
+# Coulomb friction
+# ------------------------------------
+
+contact5=DEFI_CONTACT(
+            MODELE=qmod,
+            FORMULATION='CONTINUE',
+            FROTTEMENT='COULOMB',
+            ZONE =( 
+                _F(
+                GROUP_MA_MAIT='hole2s',
+                GROUP_MA_ESCL='pin1s',
+                COULOMB = 0.0,
+                ),
+                _F(
+                GROUP_MA_MAIT='bear1s',
+                GROUP_MA_ESCL='bear2s',
+                COULOMB = 0.1,
+                ),
+            )
+);
+
+# Pre-load to tighteng the joint
+# ----------------------------------
+pres = AFFE_CHAR_MECA(
+           MODELE=qmod,
+           FORCE_FACE=_F(GROUP_MA=('pres2s',), FY=12,),
+);
+
+# From instant -5 to 0
+
+pres_m = DEFI_FONCTION(
+        NOM_PARA='INST', VALE=(-5.0, 0, 1),
+        PROL_GAUCHE='CONSTANT', PROL_DROITE='CONSTANT',
+);
+
+
+# Load Assingment
+# -------------------------
+# On the pin in part1 on the plane of symmetry
+
+load=AFFE_CHAR_MECA(
+           MODELE=qmod,
+           FORCE_FACE=_F(GROUP_MA=('load1s',), FZ=-25,)
+);
+
+load_m = DEFI_FONCTION(
+        NOM_PARA='INST', VALE=(0,0, 5, 1),
+        PROL_GAUCHE='CONSTANT', PROL_DROITE='CONSTANT',
+);
+
+# Resolution
+# ----------
+# Iter is the number of solutions
+
+iter = 5;
+result = [None]*(iter+1);
+
+# case 1
+
+result[1] = MECA_STATIQUE(
+                   MODELE=qmod,
+                   CHAM_MATER=mate,
+                   EXCIT=(
+                        _F(CHARGE=fix2,),
+                        _F(CHARGE=fix1,),
+                        _F(CHARGE=load,),
+                ),
+);
+
+# case 2
+
+result[2] = MECA_STATIQUE(
+                   MODELE=qmod,
+                   CHAM_MATER=mate,
+                   EXCIT=(
+                        _F(CHARGE=fix2,),
+                        _F(CHARGE=fix1,),
+                        _F(CHARGE=glue,),
+                        _F(CHARGE=load,),
+                ),
+);
+
+# case 3
+
+result[3] = MECA_STATIQUE(
+                   MODELE=qmod,
+                   CHAM_MATER=mate,
+                   EXCIT=(
+                        _F(CHARGE=fix2,),
+                        _F(CHARGE=fix1,),
+                        _F(CHARGE=freerot,),
+                        _F(CHARGE=load,),
+                ),
+);
+
+# case 4
+# part1 comes in contact with part 2
+
+linst = DEFI_LIST_REEL(
+        DEBUT = 0.0,
+        INTERVALLE = _F(JUSQU_A = 5.0, PAS = 1.0,),
+);
+
+result[4] = STAT_NON_LINE(
+                   MODELE=qmod,
+                   CHAM_MATER=mate,
+                   EXCIT=(
+                        _F(CHARGE=fix2,),
+                        _F(CHARGE=fix1,),
+                        _F(
+                            CHARGE=load,
+                            TYPE_CHARGE='FIXE_CSTE',
+                            FONC_MULT = load_m,
+                            ),
+                ),
+                CONTACT = contact,
+                COMP_INCR = _F(
+                    RELATION='ELAS', DEFORMATION='PETIT',
+                    group_ma=('pin1v', 'part1v', 'part2v', ),
+                ),
+                INCREMENT = _F(LIST_INST=linst),
+                NEWTON = _F(
+                    PREDICTION='TANGENTE',
+                    MATRICE='TANGENTE',
+                    REAC_ITER=1,
+                ),
+                CONVERGENCE=_F(RESI_GLOB_RELA=1e-4, ITER_GLOB_MAXI=30,),
+);
+
+# case 5
+# part1 comes in contact with part 2
+
+linst5 = DEFI_LIST_REEL(
+        DEBUT = -5.0,
+        INTERVALLE = (
+            _F(JUSQU_A = 0.0, PAS = 5.0,),
+            _F(JUSQU_A = 3.75, PAS = 1.25,),
+            _F(JUSQU_A = 5.0, PAS = 0.625/2,),
+    ),
+);
+
+result[5] = STAT_NON_LINE(
+                   MODELE=qmod,
+                   CHAM_MATER=mate,
+                   EXCIT=(
+                        _F(CHARGE=fix2,),
+                        _F(CHARGE=fix1,),
+                        _F(
+                            CHARGE=pres,
+                            TYPE_CHARGE='FIXE_CSTE',
+                            FONC_MULT = pres_m,
+                        ),
+                        _F(
+                            CHARGE=load,
+                            TYPE_CHARGE='FIXE_CSTE',
+                            FONC_MULT = load_m,
+                        ),
+                ),
+                CONTACT = contact5,
+                COMP_INCR = _F(
+                    RELATION='ELAS', DEFORMATION='PETIT',
+                    group_ma=('pin1v', 'part1v', 'part2v', ),
+                ),
+                INCREMENT = _F(LIST_INST=linst5),
+                NEWTON = _F(
+                    PREDICTION='TANGENTE',
+                    MATRICE='TANGENTE',
+                    REAC_ITER=1,
+                ),
+                CONVERGENCE=_F(RESI_GLOB_RELA=1e-4, ITER_GLOB_MAXI=50,),
+);
+
+STANLEY();
+
+FIN();
